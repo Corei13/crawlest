@@ -9,7 +9,7 @@ const { FETCH_CONCURRENCY, RETHINK_TABLE_PAGE } = require('./config');
 Rethink.initialize().then(R => {
   Server.start({ R });
 
-  Fetch.process(FETCH_CONCURRENCY, async ({ id: jobId, data: { id = jobId, url } }) => {
+  Fetch.process(Number(FETCH_CONCURRENCY), async ({ id: jobId, data: { id = jobId, url } }) => {
     console.log(`Processing job ${jobId}`);
     const start = Date.now();
     try {
@@ -23,7 +23,7 @@ Rethink.initialize().then(R => {
       console.log('Saved', JSON.stringify(res));
       return res;
     } catch (err) {
-      console.error(err);
+      console.error(err.message.slice(0, 100));
       throw err;
     }
   });

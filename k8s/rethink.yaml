@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: List
+items:
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: rethink
+  spec:
+    strategy:
+      type: Recreate
+    replicas: 1
+    selector:
+      matchLabels:
+        app: rethink
+    template:
+      metadata:
+        name: rethink
+        labels:
+          app: rethink
+      spec:
+        volumes:
+          - name: rethink-data
+            persistentVolumeClaim:
+             claimName: rethink-data-claim
+          - name: host-sys
+            hostPath:
+              path: /sys
+        initContainers:
+          - name: init-sysctl
+            image: busybox
+            volumeMounts:
+              - name: host-sys
+                mountPath: /host-sys
+            imagePullPolicy: IfNotPresent
+            command: ["sh", "-c", "echo never > /host-sys/kernel/mm/transparent_hugepage/enabled"]
+            securityContext:
+              privileged: true
+        nodeSelector:
+          cloud.google.com/gke-nodepool: bigger
+        containers:
+        - name: rethink
+          image: rethinkdb
+          ports:
+          - name: rethink
+            containerPort: 28015
+          - name: rethink-admin
+            containerPort: 8080
+          resources:
+            requests:
+              memory: 10G
+              cpu: 4000m
+          volumeMounts:
+            - mountPath: /data
+              name: rethink-data
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: rethink
+  spec:
+    type: ClusterIP
+    ports:
+    - name: rethink
+      port: 28015
+      targetPort: 28015
+    selector:
+      app: rethink
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: rethink-admin
+  spec:
+    type: LoadBalancer
+    ports:
+    - name: rethink-admin
+      port: 80
+      targetPort: 8080
+    selector:
+      app: rethink
+- kind: PersistentVolume
+  apiVersion: v1
+  metadata:
+    name: rethink-data
+  spec:
+    storageClassName: ""
+    capacity:
+      storage: 1000G
+    accessModes:
+      - ReadWriteOnce
+    gcePersistentDisk:
+      pdName: rethinkdb-1
+      fsType: ext4
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: rethink-data-claim
+  spec:
+    storageClassName: ""
+    volumeName: rethink-data
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1000G

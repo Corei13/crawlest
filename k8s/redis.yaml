@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: List
+items:
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: redis
+  spec:
+    strategy:
+      type: Recreate
+    replicas: 1
+    selector:
+      matchLabels:
+        app: redis
+    template:
+      metadata:
+        name: redis
+        labels:
+          app: redis
+      spec:
+        volumes:
+          - name: redis-data
+            persistentVolumeClaim:
+             claimName: redis-data-claim
+          - name: host-sys
+            hostPath:
+              path: /sys
+          - name: config
+            configMap:
+              name: redis-config
+              items:
+              - key: redis-config
+                path: redis.conf
+        initContainers:
+          - name: init-sysctl
+            image: busybox
+            volumeMounts:
+              - name: host-sys
+                mountPath: /host-sys
+            imagePullPolicy: IfNotPresent
+            command: ["sh", "-c", "echo never > /host-sys/kernel/mm/transparent_hugepage/enabled"]
+            securityContext:
+              privileged: true
+        nodeSelector:
+          cloud.google.com/gke-nodepool: bigger
+        containers:
+        - name: redis
+          image: redis
+          command:
+            - "redis-server"
+          args:
+            - "/conf/redis.conf"
+          ports:
+          - containerPort: 6379
+          resources:
+            requests:
+              memory: 10G
+              cpu: 2000m
+          volumeMounts:
+            - mountPath: /data
+              name: redis-data
+            - mountPath: /conf
+              name: config
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: redis
+    labels:
+      app: redis
+  spec:
+    type: ClusterIP
+    ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    selector:
+      app: redis
+- kind: PersistentVolume
+  apiVersion: v1
+  metadata:
+    name: redis-data
+  spec:
+    storageClassName: ""
+    capacity:
+      storage: 200G
+    accessModes:
+      - ReadWriteOnce
+    gcePersistentDisk:
+      pdName: crawlest-redis-1
+      fsType: ext4
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: redis-data-claim
+  spec:
+    storageClassName: ""
+    volumeName: redis-data
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 200G
+- kind: ConfigMap
+  apiVersion: v1
+  metadata:
+    name: redis-config
+  data:
+    redis-config: |
+      appendonly no
+      protected-mode no
+      save 3600 1
+      save 600 10000
+      dir /data

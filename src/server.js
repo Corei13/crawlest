@@ -24,7 +24,7 @@ const start = ({ R }) => new Promise(resolve => {
     try {
       const data = await Promise.all(body.map(
         ({ id, url, timeout = 30000, retries = 3 }) =>
-          Fetch.createJob({ id, url }).timeout(timeout).retries(retries).save()
+          Fetch.createJob({ id, url }).setId(id).timeout(timeout).retries(retries).save()
       ));
       res.status(200).send(data);
       next();
